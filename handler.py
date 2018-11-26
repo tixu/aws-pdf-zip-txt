@@ -3,6 +3,8 @@ import boto3
 import io
 import os
 import zipfile
+import glob
+from PyPDF2 import PdfFileWriter, PdfFileReader,PdfFileMerger
 from  tempfile import TemporaryDirectory, NamedTemporaryFile
 
 s3 = boto3.resource('s3')
@@ -35,15 +37,16 @@ def process_bucket (prefix):
               print(fullPath)
               body = response['Body']
               try:
-                 with io.FileIO(fullPath, 'w') as file:
-                    while file.write(body.read(amt=512)):
+                  with io.FileIO(fullPath, 'w') as file:
+                     while file.write(body.read(amt=512)):
                           pass
               except Exception as e:
                  print(e)
                  print('Error writing file')
                  raise e
-        zipArchive = zipFolder(prefix.replace("/","_"),tmpdirname)
-        s3.Object('pdfin',"out/test.zip").put(Body=open(zipArchive,'rb'))
+#       zipArchive = zipFolder(prefix.replace("/","_"),tmpdirname)
+        ocrPDF =  mergePDF(prefix.replace("/","_"),tmpdirname)
+        s3.Object('pdfin',"out/{}.pdf".format(prefix)).put(Body=open(ocrPDF,'rb'))
 
 #end_def
 def zipFolder(name,path):
@@ -61,3 +64,27 @@ def zipFolder(name,path):
     T_zip.close()
     print("folder zipped {}".format(fullName))
     return fullName
+
+def mergePDF (name, path): 
+        fullName = os.path.join("/tmp/",name)
+        pattern = "{}/*.pdf".format(path)
+        print (pattern)
+        paths = glob.glob(pattern)
+        paths.sort()
+        merger(fullName,paths)
+        return fullName
+#end_def
+
+
+def merger(output_path, input_paths):
+    pdf_merger = PdfFileMerger()
+    file_handles = []
+
+    for path in input_paths:
+        pdf_merger.append(path)
+
+    with open(output_path, 'wb') as fileobj:
+        pdf_merger.write(fileobj)
+
+
+ #end_def
