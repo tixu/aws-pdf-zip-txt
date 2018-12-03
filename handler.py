@@ -5,7 +5,12 @@ import os
 import zipfile
 import glob
 from PyPDF2 import PdfFileWriter, PdfFileReader,PdfFileMerger
-from  tempfile import TemporaryDirectory, NamedTemporaryFile
+from  tempfile import NamedTemporaryFile
+import tempfile
+from aws_xray_sdk.core import xray_recorder
+from aws_xray_sdk.core import patch_all
+
+patch_all()
 
 s3 = boto3.resource('s3')
 in_bucket  = os.getenv("input-bucket","smals-work-2")
@@ -29,11 +34,10 @@ def F(event, context):
 #end_def
 
 def process_bucket (prefix):
-     with TemporaryDirectory(suffix="_zip",prefix='lambda_zip') as tmpdirname :
+        tmpdirname =  tempfile.mkdtemp(suffix="_zip",prefix='lambda_zip')
         print ("processing {} in {} : retrieving files from bucket ".format(prefix, tmpdirname))
         my_bucket = s3.Bucket(in_bucket)
         for object in my_bucket.objects.filter(Prefix = prefix):
-                 
               response  = object.get()
               fileName = object.key.replace("/","_")
               fullPath = os.path.join(tmpdirname,fileName)
@@ -68,6 +72,8 @@ def zipFolder(name,path):
     print("folder zipped {}".format(fullName))
     return fullName
 
+
+@xray_recorder.capture('mergeall')
 def mergePDF (name, path): 
         fullName = os.path.join("/tmp/",name)
         pattern = "{}/*.pdf".format(path)
@@ -79,6 +85,7 @@ def mergePDF (name, path):
 #end_def
 
 
+@xray_recorder.capture('mergepage')
 def merger(output_path, input_paths):
     pdf_merger = PdfFileMerger()
     file_handles = []
